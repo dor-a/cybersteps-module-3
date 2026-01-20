@@ -1,0 +1,302 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo2-config
+  namespace: demo2-statefulset
+data:
+  app.py: |-
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import os
+    import json
+    import traceback
+
+    NOTES_FILE = '/data/notes/notes.txt'
+
+    class NotesHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            try:
+                if self.path == '/':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html; charset=utf-8')
+                    self.end_headers()
+                    try:
+                        with open('/app/index.html', 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            self.wfile.write(content.encode('utf-8'))
+                    except BrokenPipeError:
+                        pass
+                elif self.path == '/api/notes':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain; charset=utf-8')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    try:
+                        if os.path.exists(NOTES_FILE):
+                            with open(NOTES_FILE, 'r', encoding='utf-8') as f:
+                                self.wfile.write(f.read().encode('utf-8'))
+                        else:
+                            self.wfile.write(b'')
+                    except BrokenPipeError:
+                        pass
+                elif self.path == '/health':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(b'OK')
+                else:
+                    self.send_response(404)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(b'Not Found')
+            except BrokenPipeError:
+                pass
+            except Exception as e:
+                print(f"Error in GET: {e}")
+                traceback.print_exc()
+        
+        def do_POST(self):
+            try:
+                if self.path == '/api/notes':
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = self.rfile.read(content_length)
+                    
+                    os.makedirs(os.path.dirname(NOTES_FILE), exist_ok=True)
+                    with open(NOTES_FILE, 'w', encoding='utf-8') as f:
+                        f.write(body.decode('utf-8'))
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    try:
+                        self.wfile.write(b'Saved successfully')
+                    except BrokenPipeError:
+                        pass
+                else:
+                    self.send_response(404)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(b'Not Found')
+            except BrokenPipeError:
+                pass
+            except Exception as e:
+                print(f"Error in POST: {e}")
+                traceback.print_exc()
+        
+        def log_message(self, format, *args):
+            pass
+
+    if __name__ == '__main__':
+        os.makedirs('/data/notes', exist_ok=True)
+        server = HTTPServer(('0.0.0.0', 8080), NotesHandler)
+        pod_name = os.environ.get('POD_NAME', 'unknown')
+        print(f'Server started on port 8080 - Pod: {pod_name}')
+        print(f'Notes storage: {NOTES_FILE}')
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print('Server stopped')
+
+  index.html: |-
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Demo2 Notes App</title>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+          font-family: Arial, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          min-height: 100vh;
+          padding: 20px;
+        }
+        .container {
+          max-width: 900px;
+          margin: 0 auto;
+          background: white;
+          border-radius: 15px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+          padding: 30px;
+        }
+        h1 {
+          color: #667eea;
+          margin-bottom: 20px;
+          text-align: center;
+        }
+        .info {
+          background: #f0f4ff;
+          padding: 15px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          border-left: 4px solid #667eea;
+        }
+        .info strong { color: #667eea; }
+        .info span { color: #333; }
+        textarea {
+          width: 100%;
+          height: 400px;
+          font-size: 16px;
+          padding: 15px;
+          border: 2px solid #e0e0e0;
+          border-radius: 8px;
+          resize: vertical;
+          font-family: monospace;
+          transition: border-color 0.3s;
+        }
+        textarea:focus {
+          outline: none;
+          border-color: #667eea;
+        }
+        .button-group {
+          margin-top: 20px;
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+        button {
+          padding: 12px 30px;
+          font-size: 16px;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.3s;
+          font-weight: bold;
+        }
+        .btn-save {
+          background: #667eea;
+          color: white;
+        }
+        .btn-save:hover {
+          background: #5568d3;
+          transform: translateY(-2px);
+        }
+        .btn-reload {
+          background: #48bb78;
+          color: white;
+        }
+        .btn-reload:hover {
+          background: #38a169;
+          transform: translateY(-2px);
+        }
+        .btn-clear {
+          background: #f56565;
+          color: white;
+        }
+        .btn-clear:hover {
+          background: #e53e3e;
+          transform: translateY(-2px);
+        }
+        .status {
+          margin-top: 15px;
+          padding: 10px;
+          border-radius: 5px;
+          text-align: center;
+          font-weight: bold;
+          display: none;
+        }
+        .status.success {
+          background: #c6f6d5;
+          color: #22543d;
+          display: block;
+        }
+        .status.error {
+          background: #fed7d7;
+          color: #742a2a;
+          display: block;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Persistent Notes App</h1>
+        <div class="info">
+          <strong>Pod Name:</strong> <span id="pod-name">Loading...</span><br>
+          <strong>Storage:</strong> <span>/data/notes/notes.txt</span><br>
+          <strong>Last Saved:</strong> <span id="last-saved">Never</span>
+        </div>
+        <textarea id="notes" placeholder="Write your notes here... They will persist even after pod restarts!"></textarea>
+        <div class="button-group">
+          <button class="btn-save" onclick="saveNotes()">Save Notes</button>
+          <button class="btn-reload" onclick="loadNotes()">Reload Notes</button>
+          <button class="btn-clear" onclick="clearNotes()">Clear</button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+      
+      <script>
+        document.getElementById('pod-name').textContent = window.location.hostname || 'Unknown';
+        
+        function showStatus(message, isError) {
+          var statusDiv = document.getElementById('status');
+          statusDiv.textContent = message;
+          statusDiv.className = 'status ' + (isError ? 'error' : 'success');
+          setTimeout(function() {
+            statusDiv.style.display = 'none';
+          }, 3000);
+        }
+        
+        function updateLastSaved() {
+          var now = new Date();
+          document.getElementById('last-saved').textContent = now.toLocaleTimeString();
+        }
+        
+        function loadNotes() {
+          fetch('/api/notes')
+            .then(function(response) {
+              if (!response.ok) throw new Error('Failed to load');
+              return response.text();
+            })
+            .then(function(data) {
+              document.getElementById('notes').value = data;
+              showStatus('Notes loaded successfully!', false);
+            })
+            .catch(function(e) {
+              console.error('Error loading notes:', e);
+              showStatus('Error loading notes!', true);
+            });
+        }
+        
+        function saveNotes() {
+          var notes = document.getElementById('notes').value;
+          fetch('/api/notes', {
+            method: 'POST',
+            body: notes,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8'
+            }
+          })
+          .then(function(response) {
+            if (response.ok) {
+              updateLastSaved();
+              showStatus('Notes saved successfully!', false);
+            } else {
+              showStatus('Error saving notes!', true);
+            }
+          })
+          .catch(function(e) {
+            console.error('Error saving notes:', e);
+            showStatus('Error saving notes!', true);
+          });
+        }
+        
+        function clearNotes() {
+          if (confirm('Are you sure you want to clear all notes?')) {
+            document.getElementById('notes').value = '';
+            showStatus('Notes cleared (not saved yet)', false);
+          }
+        }
+        
+        setInterval(function() {
+          var notes = document.getElementById('notes').value;
+          if (notes.trim()) {
+            saveNotes();
+          }
+        }, 30000);
+        
+        window.addEventListener('load', loadNotes);
+      </script>
+    </body>
+    </html>

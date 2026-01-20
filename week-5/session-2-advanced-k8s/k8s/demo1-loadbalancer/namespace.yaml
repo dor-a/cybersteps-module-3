@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo1-loadbalancer
+  labels:
+    app: nginx-demo
+    demo: "1"

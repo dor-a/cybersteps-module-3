@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: demo2
+  namespace: demo2-statefulset
+  labels:
+    app: demo2
+spec:
+  serviceName: demo2-service
+  replicas: 3
+  selector:
+    matchLabels:
+      app: demo2
+  template:
+    metadata:
+      labels:
+        app: demo2
+    spec:
+      containers:
+        - name: demo2
+          image: python:3.11-slim
+          ports:
+            - containerPort: 8080
+              name: web
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data/notes
+            - name: config
+              mountPath: /app
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          command: ["python3"]
+          args: ["/app/app.py"]
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: demo2-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        # Optional: Uncomment and set your storage class
+        # storageClassName: standard

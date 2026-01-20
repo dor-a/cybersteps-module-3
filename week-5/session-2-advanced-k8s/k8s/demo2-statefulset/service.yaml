@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo2-service
+  namespace: demo2-statefulset
+  labels:
+    app: demo2
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      name: web
+      targetPort: 8080
+  selector:
+    app: demo2
